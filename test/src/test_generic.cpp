@@ -18,7 +18,7 @@ DOCTEST_TEST_CASE("no args") {
     return global;
   };
 
-  fnref::compact_function_ref<void()> fn_ref{inc_lambda};
+  veg::compact_function_ref<void()> fn_ref{inc_lambda};
   DOCTEST_CHECK(i == 0);
   fn_ref();
   DOCTEST_CHECK(i == 1);
@@ -69,7 +69,7 @@ auto baz(foo const& /*unused*/, foo /*unused*/, int /*unused*/) -> foo {
 DOCTEST_TEST_CASE("member functions") {
   foo a;
   foo b;
-  fnref::function_ref<foo(foo&, foo, int) noexcept> fn(&foo::bar);
+  veg::function_ref<foo(foo&, foo, int) noexcept> fn(&foo::bar);
   static_assert(noexcept(fn(b, {}, 1)));
 
   foo _ = fn(a, {}, 1);
@@ -81,4 +81,11 @@ DOCTEST_TEST_CASE("member functions") {
   fn = baz;
   _ = fn(b, {}, 1);
   DOCTEST_CHECK(global == nullptr);
+}
+
+DOCTEST_TEST_CASE("null") {
+  veg::function_ref<void()> f;
+  DOCTEST_CHECK(!f);
+  f = [] {};
+  DOCTEST_CHECK(f);
 }

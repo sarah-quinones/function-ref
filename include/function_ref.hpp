@@ -2,18 +2,23 @@
 #define FUNCTION_REF_FUNCTION_REF_HPP_EZASYJ8JS
 
 #include <type_traits>
-#include <cstdlib>
+
+#ifndef FUNCTION_REF_ENABLE_ASSERT
+#define FUNCTION_REF_ENABLE_ASSERT 1
+#endif
 
 #define FUNCTION_REF_DECLVAL(T) (*static_cast<T (*)()>(nullptr))()
 
-namespace fnref {
+namespace veg {
+
+[[noreturn]] void terminate();
 
 template <typename T>
 struct compact_function_ref;
 template <typename T>
 struct function_ref;
 
-namespace detail {
+namespace _fnref {
 
 struct dummy {};
 
@@ -51,11 +56,13 @@ struct is_fn_ptr<Ret (*)(Args...)> {
 };
 
 template <typename T, typename Enable = void>
-struct has_unary_plus {
+struct is_convertible_to_fn_ptr_with_unary_plus {
   static constexpr bool value = false;
 };
 template <typename T>
-struct has_unary_plus<T, decltype(static_cast<void>(+FUNCTION_REF_DECLVAL(T &&)))> {
+struct is_convertible_to_fn_ptr_with_unary_plus<
+    T,
+    decltype(static_cast<void>(+FUNCTION_REF_DECLVAL(T &&)))> {
   static constexpr bool value = is_fn_ptr<decay_t<decltype(+FUNCTION_REF_DECLVAL(T &&))>>::value;
 };
 
@@ -137,7 +144,7 @@ enum struct fn_kind_e {
 template <typename T>
 struct fn_kind {
   static constexpr fn_kind_e value =
-      has_unary_plus<T>::value ? fn_kind_e::fn_ptr : fn_kind_e::fn_obj;
+      is_convertible_to_fn_ptr_with_unary_plus<T>::value ? fn_kind_e::fn_ptr : fn_kind_e::fn_obj;
 };
 
 template <typename Ret, typename... Args>
@@ -311,6 +318,7 @@ struct fn_ref_impl<fn_kind_e::mem_fn_ptr> {
         static_cast<Args&&>(args)...);
   }
 };
+
 template <
     typename State,
     template <typename Ret, typename Fn, typename... Args>
@@ -320,13 +328,14 @@ template <
     typename... Args>
 struct function_ref_impl {
 
+  constexpr function_ref_impl() = default;
   template <
       typename Fn,
       typename =                           //
-      detail::enable_if_t<                 //
+      _fnref::enable_if_t<                 //
                                            //
           !std::is_same<                   //
-              detail::remove_cvref_t<Fn>,  //
+              _fnref::remove_cvref_t<Fn>,  //
               function_ref_impl            //
               >::value &&                  //
                                            //
@@ -334,82 +343,93 @@ struct function_ref_impl {
           >                                //
       >
   function_ref_impl(Fn&& fn) noexcept
-      : m_state(detail::fn_ref_impl<detail::fn_kind<detail::decay_t<Fn>>::value>::template address<
+      : m_state(_fnref::fn_ref_impl<_fnref::fn_kind<_fnref::decay_t<Fn>>::value>::template address<
                 State>(fn)),
-        m_call(detail::fn_ref_impl<detail::fn_kind<detail::decay_t<Fn>>::value>::
+        m_call(_fnref::fn_ref_impl<_fnref::fn_kind<_fnref::decay_t<Fn>>::value>::
                    template call<State, Fn, Ret, Args...>) {}
 
   auto operator()(Args... args) const noexcept(No_Except) -> Ret {
+#if FUNCTION_REF_ENABLE_ASSERT == 1
+    if (m_call == nullptr) {
+      terminate();
+    }
+#endif
     return this->m_call(this->m_state, static_cast<Args&&>(args)...);
   }
 
-private:
-  template <detail::fn_kind_e>
-  friend struct detail::fn_ref_impl;
+  constexpr explicit operator bool() const { return m_call != nullptr; }
 
-  State m_state;
-  auto (*m_call)(State, Args...) -> Ret;
+private:
+  template <_fnref::fn_kind_e>
+  friend struct _fnref::fn_ref_impl;
+
+  State m_state = {nullptr};
+  auto (*m_call)(State, Args...) -> Ret = nullptr;
 };
 
-} // namespace detail
+} // namespace _fnref
 
 template <typename Ret, typename... Args>
 struct compact_function_ref<Ret(Args...)>
-    : private detail::
-          function_ref_impl<detail::sstate_t, detail::is_call_convertible, false, Ret, Args...> {
+    : private _fnref::
+          function_ref_impl<_fnref::sstate_t, _fnref::is_call_convertible, false, Ret, Args...> {
 private:
   using base =
-      detail::function_ref_impl<detail::sstate_t, detail::is_call_convertible, false, Ret, Args...>;
+      _fnref::function_ref_impl<_fnref::sstate_t, _fnref::is_call_convertible, false, Ret, Args...>;
 
 public:
   using base ::base;
   using base::operator();
+  using base::operator bool;
 };
 
 template <typename Ret, typename... Args>
 struct function_ref<Ret(Args...)>
-    : private detail::
-          function_ref_impl<detail::state_t, detail::is_invoke_convertible, false, Ret, Args...> {
+    : private _fnref::
+          function_ref_impl<_fnref::state_t, _fnref::is_invoke_convertible, false, Ret, Args...> {
 private:
-  using base = detail::
-      function_ref_impl<detail::state_t, detail::is_invoke_convertible, false, Ret, Args...>;
+  using base = _fnref::
+      function_ref_impl<_fnref::state_t, _fnref::is_invoke_convertible, false, Ret, Args...>;
 
 public:
   using base ::base;
   using base::operator();
+  using base::operator bool;
 };
 
 #if __cplusplus >= 201703L
 
 template <typename Ret, typename... Args>
 struct compact_function_ref<Ret(Args...) noexcept>
-    : private detail::
-          function_ref_impl<detail::sstate_t, detail::is_call_convertible, true, Ret, Args...> {
+    : private _fnref::
+          function_ref_impl<_fnref::sstate_t, _fnref::is_call_convertible, true, Ret, Args...> {
 private:
   using base =
-      detail::function_ref_impl<detail::sstate_t, detail::is_call_convertible, true, Ret, Args...>;
+      _fnref::function_ref_impl<_fnref::sstate_t, _fnref::is_call_convertible, true, Ret, Args...>;
 
 public:
   using base ::base;
   using base::operator();
+  using base::operator bool;
 };
 
 template <typename Ret, typename... Args>
 struct function_ref<Ret(Args...) noexcept>
-    : private detail::
-          function_ref_impl<detail::state_t, detail::is_invoke_convertible, true, Ret, Args...> {
+    : private _fnref::
+          function_ref_impl<_fnref::state_t, _fnref::is_invoke_convertible, true, Ret, Args...> {
 private:
   using base =
-      detail::function_ref_impl<detail::state_t, detail::is_invoke_convertible, true, Ret, Args...>;
+      _fnref::function_ref_impl<_fnref::state_t, _fnref::is_invoke_convertible, true, Ret, Args...>;
 
 public:
   using base ::base;
   using base::operator();
+  using base::operator bool;
 };
 
 #endif
 
-} // namespace fnref
+} // namespace veg
 
 #undef FUNCTION_REF_DECLVAL
 

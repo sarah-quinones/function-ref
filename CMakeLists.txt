@@ -10,10 +10,10 @@ include(cmake/compiler_warnings.cmake)
 include(cmake/static_analyzers.cmake)
 include(cmake/sanitizers.cmake)
 
-add_library(function-ref INTERFACE)
+add_library(function-ref src/function_ref.cpp)
 
 target_include_directories(
-  function-ref INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include
+  function-ref PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 if(top_level AND ENABLE_TESTING)
