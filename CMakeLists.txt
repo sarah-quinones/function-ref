@@ -2,7 +2,11 @@ cmake_minimum_required(VERSION 3.16)
 project(function-ref CXX)
 
 get_directory_property(has_parent PARENT_DIRECTORY)
-set(top_level $<NOT:$<BOOL:${has_parent}>>)
+if (has_parent)
+  set(top_level FALSE)
+else()
+  set(top_level TRUE)
+endif()
 
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 
